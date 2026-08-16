@@ -1,0 +1,8 @@
+# Offline fallback for hosts whose Docker daemon cannot reach registries.
+# The binary and web assets are built on a trusted amd64 workstation first.
+FROM homeassistant/home-assistant:stable
+WORKDIR /app
+COPY bin/mijia-archive-linux-amd64 /usr/local/bin/mijia-archive
+COPY web/dist /app/web
+ENTRYPOINT ["/usr/local/bin/mijia-archive"]
+CMD ["serve", "--web-dir", "/app/web", "--listen", "0.0.0.0:8080"]

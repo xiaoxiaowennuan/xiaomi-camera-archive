@@ -1,0 +1,65 @@
+services:
+  mijia-archive:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: mijia-archive:local
+    container_name: mijia-archive
+    command:
+      - serve
+      - --media-library-root
+      - /media-library
+      - --media-library-host-root
+      - ${MEDIA_LIBRARY_ROOT:?set MEDIA_LIBRARY_ROOT}
+      - --initial-folder-name
+      - ${INITIAL_FOLDER_NAME:-Default archive}
+      - --initial-folder-path
+      - ${INITIAL_FOLDER_PATH:?set INITIAL_FOLDER_PATH}
+      - --state-dir
+      - /state
+      - --web-dir
+      - /app/web
+      - --listen
+      - 0.0.0.0:8080
+      - --transcode-max-bytes
+      - ${TRANSCODE_MAX_BYTES:-21474836480}
+      - --bootstrap-admin-password-file
+      - /run/secrets/bootstrap_admin_password
+      - --secure-cookies=${SECURE_COOKIES:-false}
+    user: "${APP_UID:-1000}:${APP_GID:-1000}"
+    ports:
+      - "${APP_BIND_IP:-127.0.0.1}:${APP_PORT:-18080}:8080"
+    volumes:
+      - "${MEDIA_LIBRARY_ROOT:?set MEDIA_LIBRARY_ROOT}:/media-library:ro"
+      - "./state:/state:rw"
+    secrets:
+      - bootstrap_admin_password
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      MIJIA_STATE_DIR: /state
+      MIJIA_MEDIA_LIBRARY_ROOT: /media-library
+      MIJIA_MEDIA_LIBRARY_HOST_ROOT: ${MEDIA_LIBRARY_ROOT:?set MEDIA_LIBRARY_ROOT}
+      MIJIA_INITIAL_FOLDER_NAME: ${INITIAL_FOLDER_NAME:-Default archive}
+      MIJIA_INITIAL_FOLDER_PATH: ${INITIAL_FOLDER_PATH:?set INITIAL_FOLDER_PATH}
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
+    mem_limit: 3g
+    cpus: 4.0
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+secrets:
+  bootstrap_admin_password:
+    file: ${BOOTSTRAP_ADMIN_PASSWORD_FILE:-./secrets/bootstrap_admin_password}

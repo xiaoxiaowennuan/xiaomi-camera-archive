@@ -1,0 +1,11 @@
+.git
+.gitignore
+.DS_Store
+state
+web/node_modules
+web/test-results
+web/playwright-report
+web/*.tsbuildinfo
+deploy/.env
+deploy/secrets
+CODEX_TASK.md

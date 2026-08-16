@@ -1,0 +1,13 @@
+.DS_Store
+/bin/
+/state/
+*.db
+*.db-shm
+*.db-wal
+/web/node_modules
+/web/dist/
+/web/test-results/
+/web/playwright-report/
+/web/*.tsbuildinfo
+/deploy/.env
+/deploy/secrets/
