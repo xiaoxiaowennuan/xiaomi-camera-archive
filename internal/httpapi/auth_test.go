@@ -66,6 +66,11 @@ func authenticatedRequest(method, target, body string, cookies []*http.Cookie) *
 
 func TestAuthenticationAuthorizationAndFolderBoundary(t *testing.T) {
 	handler, _, library := managementHandler(t)
+	cover := httptest.NewRecorder()
+	handler.ServeHTTP(cover, httptest.NewRequest(http.MethodGet, "/api/v1/media/0123456789abcdef0123456789abcdef/first-frame", nil))
+	if cover.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated cover status=%d", cover.Code)
+	}
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/folders", nil))
 	if rr.Code != http.StatusUnauthorized {

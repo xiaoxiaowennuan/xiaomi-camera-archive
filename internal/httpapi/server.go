@@ -50,6 +50,7 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("GET /api/v1/timeline", s.protect(s.timeline, false))
 	m.HandleFunc("GET /api/v1/events", s.protect(s.events, false))
 	m.HandleFunc("GET /api/v1/media/{id}/source", s.protect(s.source, false))
+	m.HandleFunc("GET /api/v1/media/{id}/first-frame", s.protect(s.firstFrame, false))
 	m.HandleFunc("GET /api/v1/media/{id}/thumbnail", s.protect(s.thumbnail, false))
 	m.HandleFunc("POST /api/v1/media/{id}/compat", s.protect(s.compatPost, false))
 	m.HandleFunc("GET /api/v1/media/{id}/compat", s.protect(s.compatGet, false))
@@ -347,4 +348,26 @@ func (s *Server) compatGet(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "video/mp4")
 	http.ServeContent(w, r, "", info.ModTime(), f)
+}
+
+func (s *Server) firstFrame(w http.ResponseWriter, r *http.Request) {
+	rec, err := s.record(r)
+	if err != nil {
+		problem(w, 404, "media_not_found")
+		return
+	}
+	source, err := s.safePath(rec.MountPath, rec.VideoPath)
+	if err != nil {
+		problem(w, 404, "media_not_found")
+		return
+	}
+	key := s.Transcode.Key(rec.PublicID, rec.SizeBytes, rec.MTimeNS)
+	path, err := s.Transcode.FirstFrame(r.Context(), key, source)
+	if err != nil {
+		problem(w, 503, "first_frame_unavailable")
+		return
+	}
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Cache-Control", "private, max-age=300")
+	http.ServeFile(w, r, path)
 }

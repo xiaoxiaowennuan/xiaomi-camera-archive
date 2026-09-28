@@ -19,11 +19,12 @@ type Status struct {
 	RetryAfterMS int    `json:"retryAfterMs,omitempty"`
 }
 type Manager struct {
-	Root, FFmpeg string
-	mu           sync.Mutex
-	jobs         map[string]string
-	worker       chan struct{}
-	maxBytes     int64
+	Root, FFmpeg    string
+	mu              sync.Mutex
+	jobs            map[string]string
+	worker          chan struct{}
+	thumbnailWorker chan struct{}
+	maxBytes        int64
 }
 
 func New(root, ffmpeg string, workers int, maxBytes int64) (*Manager, error) {
@@ -34,7 +35,7 @@ func New(root, ffmpeg string, workers int, maxBytes int64) (*Manager, error) {
 	if err := os.MkdirAll(cache, 0o700); err != nil {
 		return nil, err
 	}
-	return &Manager{Root: cache, FFmpeg: ffmpeg, jobs: map[string]string{}, worker: make(chan struct{}, workers), maxBytes: maxBytes}, nil
+	return &Manager{Root: cache, FFmpeg: ffmpeg, jobs: map[string]string{}, worker: make(chan struct{}, workers), thumbnailWorker: make(chan struct{}, 1), maxBytes: maxBytes}, nil
 }
 func (m *Manager) Key(id string, size, mtime int64) string {
 	sum := sha256.Sum256([]byte(fmt.Sprintf("compat-v1:%s:%d:%d", id, size, mtime)))

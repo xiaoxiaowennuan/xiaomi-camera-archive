@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { DatePicker } from './DatePicker';
+import { ClipBrowser } from './ClipBrowser';
 import {
   targetSegment,
   timelineSecondsAtClientX,
@@ -37,7 +38,7 @@ function PlayerPage({ folderId, folderName, firstDate }: PlayerPageProps) {
   const [selected, setSelected] = useState<Segment>();
   const [speed, setSpeed] = useState(Number(params.get('speed')) || 1);
   const [timelineSeconds, setTimelineSeconds] = useState(0);
-  const [notice, setNotice] = useState('选择时间或事件开始播放');
+  const [notice, setNotice] = useState('点击封面开始播放');
   const video = useRef<HTMLVideoElement>(null);
   const playerSection = useRef<HTMLElement>(null);
   const scrubbing = useRef(false);
@@ -53,10 +54,16 @@ function PlayerPage({ folderId, folderName, firstDate }: PlayerPageProps) {
   );
 
   useEffect(() => {
+    const controller = new AbortController();
+    playbackAttempt.current += 1;
+    stopFrameWatchdog();
+    video.current?.pause();
+    setSegments([]);
+    setSelected(undefined);
     const start = new Date(dayStart).toISOString();
     const end = new Date(dayStart + 86400000).toISOString();
     fetch(
-      `/api/v1/timeline?folder=${encodeURIComponent(folderId)}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`,
+      `/api/v1/timeline?folder=${encodeURIComponent(folderId)}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, { signal: controller.signal },
     )
       .then((response) => response.json())
       .then((data) => {
@@ -65,7 +72,8 @@ function PlayerPage({ folderId, folderName, firstDate }: PlayerPageProps) {
         setSelected(undefined);
         setTimelineSeconds(0);
       })
-      .catch(() => setNotice('时间线加载失败'));
+      .catch((error) => { if (error.name !== 'AbortError') setNotice('时间线加载失败'); });
+    return () => { controller.abort(); playbackAttempt.current += 1; stopFrameWatchdog(); };
   }, [dayStart, folderId]);
 
   useEffect(() => {
@@ -131,6 +139,7 @@ function PlayerPage({ folderId, folderName, firstDate }: PlayerPageProps) {
     stopFrameWatchdog();
     const attempt = ++playbackAttempt.current;
     setSelected(segment);
+    video.current?.pause();
     setTimelineSeconds((segment.startMs - dayStart + offset) / 1000);
     if (!video.current) return;
     let useCompat = compat || forceCompat.current;
@@ -139,7 +148,7 @@ function PlayerPage({ folderId, folderName, firstDate }: PlayerPageProps) {
     if (useCompat) {
       let ready = false;
       try {
-        for (let index = 0; index < 60; index += 1) {
+        for (let index = 0; index < 900; index += 1) {
           const response = await fetch(`/api/v1/media/${segment.id}/compat`, {
             method: 'POST',
           });
@@ -168,8 +177,14 @@ function PlayerPage({ folderId, folderName, firstDate }: PlayerPageProps) {
       }
     }
     if (attempt !== playbackAttempt.current) return;
+    if (!useCompat) {
+      frameTimer.current = window.setTimeout(() => {
+        if (attempt === playbackAttempt.current && video.current?.readyState === 0) switchToCompat(segment);
+      }, 12000);
+    }
     video.current.src = `/api/v1/media/${segment.id}/${useCompat ? 'compat' : 'source'}`;
     video.current.onloadedmetadata = () => {
+      if (attempt !== playbackAttempt.current) return;
       if (video.current) {
         video.current.currentTime = offset / 1000;
         video.current.playbackRate = speed;
@@ -223,7 +238,7 @@ function PlayerPage({ folderId, folderName, firstDate }: PlayerPageProps) {
   }
 
   return (
-    <main>
+    <main className="gallery-layout">
       <header>
         <div>
           <a className="back-link" href="/folders">← 返回录像文件夹</a>
@@ -233,7 +248,12 @@ function PlayerPage({ folderId, folderName, firstDate }: PlayerPageProps) {
         <DatePicker folderId={folderId} value={date} onChange={setDate} />
       </header>
 
-      <section className="player" ref={playerSection}>
+      <ClipBrowser key={`${folderId}:${date}`} segments={segments} dayStart={dayStart} selectedId={selected?.id} onSelect={(segment) => {
+        void open(segment);
+        requestAnimationFrame(() => playerSection.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+      }} />
+      <section className="player" ref={playerSection} hidden={!selected}>
+        <div className="playback-title"><strong>正在查看录像</strong><button onClick={() => { video.current?.pause(); playbackAttempt.current += 1; stopFrameWatchdog(); setSelected(undefined); }}>返回封面</button></div>
         <video
           ref={video}
           playsInline
@@ -277,6 +297,7 @@ function PlayerPage({ folderId, folderName, firstDate }: PlayerPageProps) {
           }}
         />
         <div className="controls">
+          <button disabled={!selected} onClick={() => { if (selected) switchToCompat(selected); }}>兼容播放</button>
           <button className="event-nav" onClick={() => nextEvent(-1)}>上一个事件</button>
           {[1, 2, 4].map((value) => (
             <button
@@ -292,7 +313,7 @@ function PlayerPage({ folderId, folderName, firstDate }: PlayerPageProps) {
         <p role="status" aria-live="polite">{notice}</p>
       </section>
 
-      <section className="timeline" aria-labelledby="timeline-title">
+      <section className="timeline" hidden={!selected} aria-labelledby="timeline-title">
         <div className="timeline-heading">
           <h2 id="timeline-title">24 小时时间轴</h2>
           <div className="legend" aria-label="时间轴颜色图例">
@@ -380,7 +401,7 @@ function PlayerPage({ folderId, folderName, firstDate }: PlayerPageProps) {
         </div>
       </section>
 
-      <aside>
+      <aside hidden={!selected || !events.length}>
         <h2>
           事件 <small>{events.length}</small>
         </h2>
@@ -566,13 +587,13 @@ function FoldersPage({ user, folders, reload }: { user: User; folders: Folder[];
           {folders.map((folder) => (
             <article className="folder-card" key={folder.id}>
               <a
-                className={!folder.mounted || folder.scanStatus !== 'ready' || !folder.firstDate ? 'disabled-folder' : ''}
-                aria-disabled={!folder.mounted || folder.scanStatus !== 'ready' || !folder.firstDate}
-                href={folder.mounted && folder.scanStatus === 'ready' && folder.firstDate ? `/folders/${folder.id}/player?date=${folder.firstDate}` : undefined}
+                className={!folder.mounted || !folder.firstDate ? 'disabled-folder' : ''}
+                aria-disabled={!folder.mounted || !folder.firstDate}
+                href={folder.mounted && folder.firstDate ? `/folders/${folder.id}/player?date=${folder.firstDate}` : undefined}
               >
                 <span className="folder-icon" aria-hidden="true">▰</span>
                 <strong>{folder.name}</strong>
-                <small>{folder.mounted ? (folder.scanStatus === 'ready' ? (folder.firstDate ? '可播放' : '暂无录像') : '正在索引') : '目录不可用'}</small>
+                <small>{folder.mounted ? (folder.scanStatus === 'ready' ? (folder.firstDate ? '可播放' : '暂无录像') : (folder.firstDate ? '扫描中 · 可查看已有录像' : '正在索引')) : '目录不可用'}</small>
               </a>
               {folder.message && <p className="folder-message">{folder.message}</p>}
               {user.role === 'admin' && (
@@ -698,7 +719,6 @@ function AuthenticatedApp({ user }: { user: User }) {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(true);
   const reload = useCallback(() => {
-    setLoading(true);
     void api<{ folders: Folder[] }>('/api/v1/folders').then((data) => { setFolders(data.folders); setLoading(false); });
   }, []);
   useEffect(() => { reload(); }, [reload]);
@@ -717,7 +737,7 @@ function AuthenticatedApp({ user }: { user: User }) {
   if (playerMatch) {
     const folder = folders.find((item) => item.id === playerMatch[1]);
     if (loading) return <main className="loading-page">正在加载…</main>;
-    if (!folder?.mounted || folder.scanStatus !== 'ready') {
+    if (!folder?.mounted || !folder.firstDate) {
       location.replace('/folders');
       return null;
     }
