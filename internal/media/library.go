@@ -2,6 +2,7 @@ package media
 
 import (
 	"errors"
+	"mijia-archive/internal/archive"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,9 +59,8 @@ func (l Library) IsArchiveFolder(serverPath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	info, err := os.Stat(filepath.Join(mountPath, "MIJIA_RECORD_VIDEO"))
-	if err != nil || !info.IsDir() {
-		return "", errors.New("MIJIA_RECORD_VIDEO is missing")
+	if !archive.HasVideoLayout(mountPath) {
+		return "", errors.New("recognized video layout is missing")
 	}
 	return mountPath, nil
 }

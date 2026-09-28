@@ -97,3 +97,23 @@ func TestIDOnlyMediaRangeAndNoPathLeak(t *testing.T) {
 		}
 	}
 }
+
+func TestSafePathNASLayouts(t *testing.T) {
+	for _, rel := range []string{"2026081007/12M56S_1786317176.mp4", "00_20260920162802_20260920163344.mp4"} {
+		root := t.TempDir()
+		path := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("synthetic"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		got, err := (&Server{}).safePath(root, filepath.FromSlash(rel))
+		if err != nil || got != path {
+			t.Fatalf("got %q err %v", got, err)
+		}
+		if _, err := (&Server{}).safePath(root, filepath.Join("..", "outside.mp4")); err == nil {
+			t.Fatal("accepted path escape")
+		}
+	}
+}

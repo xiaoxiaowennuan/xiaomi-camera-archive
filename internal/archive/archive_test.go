@@ -41,3 +41,26 @@ func TestParseMotionDeduplicatesAndPreservesFlag(t *testing.T) {
 		}
 	}
 }
+
+func TestParseFlatVideoPath(t *testing.T) {
+	loc := time.FixedZone("CST", 8*3600)
+	got, err := ParseVideoPath("00_20260920162802_20260920163344.mp4", loc)
+	if err != nil || got.Format(time.RFC3339) != "2026-09-20T16:28:02+08:00" {
+		t.Fatalf("got %v, %v", got, err)
+	}
+	for _, bad := range []string{
+		"00_20260230162802_20260230163344.mp4",
+		"00_20260920162802_20260920162801.mp4",
+		"00_20260920162802_20260920162802.mp4",
+		"../00_20260920162802_20260920163344.mp4",
+		"2026092016/00_20260920162802_20260920163344.mp4",
+	} {
+		if _, err := ParseVideoPath(bad, loc); err == nil {
+			t.Errorf("accepted %q", bad)
+		}
+	}
+	overnight, err := ParseVideoPath("00_20260920235950_20260921000100.mp4", loc)
+	if err != nil || overnight.Day() != 20 {
+		t.Fatalf("overnight: %v %v", overnight, err)
+	}
+}

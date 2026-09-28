@@ -533,7 +533,7 @@ function FolderEditor({ folder, onSaved, onCancel }: { folder?: Folder; onSaved:
           .then(onSaved)
           .catch((reason: Error) => {
             setError(reason.message === 'folder_outside_library_or_invalid'
-              ? '目录必须位于配置的录像库根目录内，并包含 MIJIA_RECORD_VIDEO。'
+              ? '目录必须位于配置的录像库根目录内，并包含 MIJIA_RECORD_VIDEO、按小时分目录或平铺的米家录像。'
               : '保存失败，名称或路径可能已存在。');
             setBusy(false);
           });

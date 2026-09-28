@@ -50,17 +50,23 @@ func (s *Scanner) Scan(ctx context.Context, statePath string) (Summary, error) {
 	if err := validateRoots(s.MediaRoot, statePath); err != nil {
 		return summary, err
 	}
-	videoRoot := filepath.Join(s.MediaRoot, "MIJIA_RECORD_VIDEO")
-	hours, err := os.ReadDir(videoRoot)
+	videoRoot, err := archive.VideoRoot(s.MediaRoot)
+	if err != nil {
+		return summary, err
+	}
+	roots, err := os.ReadDir(videoRoot)
 	if err != nil {
 		return summary, errors.New("video root is not readable")
 	}
-	var segments []archive.Segment
-	for _, hour := range hours {
-		if hour.Type()&os.ModeSymlink != 0 || !hour.IsDir() || len(hour.Name()) != 10 {
-			continue
+	dirs := []string{""}
+	for _, entry := range roots {
+		if entry.Type()&os.ModeSymlink == 0 && entry.IsDir() && len(entry.Name()) == 10 {
+			dirs = append(dirs, entry.Name())
 		}
-		entries, err := os.ReadDir(filepath.Join(videoRoot, hour.Name()))
+	}
+	var segments []archive.Segment
+	for _, dir := range dirs {
+		entries, err := os.ReadDir(filepath.Join(videoRoot, dir))
 		if err != nil {
 			return summary, errors.New("video directory is not readable")
 		}
@@ -68,7 +74,7 @@ func (s *Scanner) Scan(ctx context.Context, statePath string) (Summary, error) {
 			if !archive.IsRegularNoSymlink(entry) || !strings.HasSuffix(entry.Name(), ".mp4") {
 				continue
 			}
-			rel := filepath.Join(hour.Name(), entry.Name())
+			rel := filepath.Join(dir, entry.Name())
 			started, err := archive.ParseVideoPath(rel, s.Location)
 			if err != nil {
 				continue

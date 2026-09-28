@@ -9,10 +9,12 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 )
 
 var (
+	flatPattern  = regexp.MustCompile(`^[0-9]{2}_([0-9]{14})_([0-9]{14})\.mp4$`)
 	hourPattern  = regexp.MustCompile(`^[0-9]{10}$`)
 	videoPattern = regexp.MustCompile(`^([0-9]{2})M([0-9]{2})S_([0-9]{10})\.mp4$`)
 )
@@ -53,7 +55,21 @@ func ParseVideoPath(rel string, loc *time.Location) (time.Time, error) {
 	if filepath.IsAbs(rel) || filepath.Clean(rel) != rel {
 		return time.Time{}, errors.New("invalid relative path")
 	}
+	if loc == nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return time.Time{}, errors.New("invalid relative path or timezone")
+	}
 	dir, name := filepath.Split(rel)
+	if m := flatPattern.FindStringSubmatch(name); m != nil && dir == "" {
+		start, err := time.ParseInLocation("20060102150405", m[1], loc)
+		if err != nil {
+			return time.Time{}, errors.New("invalid start time")
+		}
+		end, err := time.ParseInLocation("20060102150405", m[2], loc)
+		if err != nil || !end.After(start) {
+			return time.Time{}, errors.New("invalid end time")
+		}
+		return start, nil
+	}
 	dir = filepath.Base(filepath.Clean(dir))
 	if !hourPattern.MatchString(dir) {
 		return time.Time{}, errors.New("invalid hour directory")
@@ -109,4 +125,51 @@ func IsRegularNoSymlink(entry os.DirEntry) bool {
 	}
 	info, err := entry.Info()
 	return err == nil && info.Mode().IsRegular()
+}
+
+// VideoRoot accepts the original wrapper or camera directories written by NAS backup.
+// A present but invalid wrapper must never silently switch the indexed root.
+func VideoRoot(root string) (string, error) {
+	wrapped := filepath.Join(root, "MIJIA_RECORD_VIDEO")
+	info, err := os.Lstat(wrapped)
+	if err == nil {
+		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			return "", errors.New("invalid video root")
+		}
+		return wrapped, nil
+	}
+	if !os.IsNotExist(err) {
+		return "", errors.New("video root is not readable")
+	}
+	info, err = os.Stat(root)
+	if err != nil || !info.IsDir() {
+		return "", errors.New("video root is not readable")
+	}
+	return root, nil
+}
+
+func HasVideoLayout(root string) bool {
+	videoRoot, err := VideoRoot(root)
+	if err != nil {
+		return false
+	}
+	if videoRoot != root {
+		return true
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return false
+	}
+	for _, entry := range entries {
+		if entry.Type()&os.ModeSymlink != 0 {
+			continue
+		}
+		if entry.IsDir() && hourPattern.MatchString(entry.Name()) {
+			return true
+		}
+		if IsRegularNoSymlink(entry) && flatPattern.MatchString(entry.Name()) {
+			return true
+		}
+	}
+	return false
 }

@@ -233,7 +233,7 @@ func (s *Server) folderView(folder store.FolderRecord, admin bool) folderView {
 		view.FirstDate = time.UnixMilli(first).In(s.Location).Format("2006-01-02")
 	}
 	if err != nil {
-		view.Message = "目录当前不可用。请确认路径位于已配置的录像库根目录内，且包含 MIJIA_RECORD_VIDEO。"
+		view.Message = "目录当前不可用。请确认路径位于已配置的录像库根目录内，且包含米家录像子目录或录像文件。"
 	} else if folder.ScanStatus == "failed" {
 		view.Message = "最近一次索引失败，请检查目录格式后重新扫描。"
 	} else if folder.ScanStatus == "pending" || folder.ScanStatus == "scanning" {

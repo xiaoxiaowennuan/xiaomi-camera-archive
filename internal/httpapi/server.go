@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"mijia-archive/internal/archive"
 	"mijia-archive/internal/auth"
 	"mijia-archive/internal/media"
 	"mijia-archive/internal/store"
@@ -241,7 +242,11 @@ func (s *Server) safePath(mediaRoot, rel string) (string, error) {
 	if filepath.IsAbs(rel) || filepath.Clean(rel) != rel {
 		return "", os.ErrNotExist
 	}
-	root, err := filepath.Abs(filepath.Join(mediaRoot, "MIJIA_RECORD_VIDEO"))
+	videoRoot, err := archive.VideoRoot(mediaRoot)
+	if err != nil {
+		return "", err
+	}
+	root, err := filepath.Abs(videoRoot)
 	if err != nil {
 		return "", err
 	}

@@ -24,7 +24,7 @@ The indexer applies these rules:
 - The Unix timestamp is the segment start time. The hour directory, minute, and second must agree with it in the configured timezone.
 - A same-basename `.jpeg` file is an optional thumbnail.
 - Symlinks, non-regular files, hidden metadata, `.cached` files, unknown extensions, and unrelated files are ignored.
-- A configured archive folder must contain `MIJIA_RECORD_VIDEO`; `MIJIA_RECORD_MOTION` is optional.
+- A configured archive folder may contain `MIJIA_RECORD_VIDEO`, direct hour directories, or flat `NN_YYYYMMDDHHmmss_YYYYMMDDHHmmss.mp4` files; `MIJIA_RECORD_MOTION` is optional.
 
 Synthetic example for `Asia/Shanghai`:
 
@@ -73,7 +73,7 @@ Some archives contain encrypted or wrapped log files with `IMI/` and `v1.0.0` he
 
 ## Conservative indexing rules
 
-1. Index only `MIJIA_RECORD_VIDEO/YYYYMMDDHH/mmMssS_UNIX.mp4` and an optional same-basename JPEG.
+1. Index the wrapped layout, direct `YYYYMMDDHH/mmMssS_UNIX.mp4`, or flat `NN_START_END.mp4`, plus optional same-basename JPEG.
 2. Treat the Unix timestamp as the segment start and reject conflicting time fields.
 3. Ignore symlinks, hidden files, `.cached` files, unknown extensions, and non-regular files.
 4. Probe only new or changed MP4 files based on relative path, size, and mtime.
@@ -85,3 +85,15 @@ Some archives contain encrypted or wrapped log files with `IMI/` and `v1.0.0` he
 - Other camera generations may use different codecs, resolutions, directory names, or motion flags.
 - The motion flag mapping is not backed by a vendor binary format specification.
 - `.record_msg` and encrypted log semantics remain unknown and intentionally unsupported.
+
+## NAS backup layouts added by this fork
+
+The camera folder may directly contain hour directories, or flat files such as
+`00_20240102030405_20240102030947.mp4`. Flat start/end fields use the configured
+local timezone. Both timestamps must parse and end must be after start; actual
+playable duration still comes from ffprobe, not a filename guess. Files with
+unrecognized names are skipped. If the legacy wrapper exists it takes precedence;
+a symlink or invalid wrapper is rejected. No original file is renamed or moved.
+
+These rules were checked against user-provided directory evidence. Tests use
+synthetic files and a fake probe; deployment must separately verify real playback.

@@ -81,3 +81,44 @@ func TestScanIsIdempotentAndIgnoresSymlink(t *testing.T) {
 		t.Fatalf("missing input was not soft-deleted: %d %d %v", segments, events, err)
 	}
 }
+
+func TestScanNASLayouts(t *testing.T) {
+	for _, rel := range []string{
+		"2026081007/12M56S_1786317176.mp4",
+		"00_20260920162802_20260920163344.mp4",
+	} {
+		t.Run(rel, func(t *testing.T) {
+			root, state := t.TempDir(), t.TempDir()
+			file := filepath.Join(root, rel)
+			if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(file, []byte("synthetic"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			db, err := store.Open(filepath.Join(state, "archive.db"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			folder, err := db.EnsureBootstrapFolder(context.Background(), "Test", root, root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			loc := time.FixedZone("CST", 8*3600)
+			p := &fakeProbe{}
+			scan := Scanner{FolderID: folder.ID, MediaRoot: root, Location: loc, Store: db, Prober: p}
+			first, err := scan.Scan(context.Background(), state)
+			if err != nil {
+				t.Fatal(err)
+			}
+			second, err := scan.Scan(context.Background(), state)
+			if err != nil || first.Segments != 1 || second.Reused != 1 || p.calls != 1 {
+				t.Fatalf("first=%+v second=%+v err=%v", first, second, err)
+			}
+			if !archive.HasVideoLayout(root) {
+				t.Fatal("camera folder not recognized")
+			}
+		})
+	}
+}

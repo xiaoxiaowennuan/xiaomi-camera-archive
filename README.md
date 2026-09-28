@@ -29,7 +29,7 @@ Passwords are hashed with Argon2id. HTTP sessions use the open-source [SCS](http
 
 - Docker Engine with Docker Compose v2, or Go 1.25+, Node.js 24+, pnpm, ffmpeg, and ffprobe for local development
 - A dedicated directory containing one or more Mijia archive folders
-- Each archive folder must contain `MIJIA_RECORD_VIDEO`; `MIJIA_RECORD_MOTION` is optional
+- Each archive folder may use `MIJIA_RECORD_VIDEO`, direct hourly directories, or flat `NN_START_END.mp4` files; `MIJIA_RECORD_MOTION` is optional
 
 Do not mount an entire disk, system directory, home directory, or Docker socket. Mount only a dedicated camera archive library.
 
@@ -109,7 +109,7 @@ To rotate a password, replace `deploy/secrets/bootstrap_admin_password` with the
 
 ## Folder management
 
-After login, the folder page is the default entry point. Administrators can add or edit archive folders using their server paths. The service converts each server path to a location under the read-only media-library mount and rejects paths outside the configured root, symlink escapes, missing directories, and folders without `MIJIA_RECORD_VIDEO`.
+After login, the folder page is the default entry point. Administrators can add or edit archive folders using their server paths. The service converts each server path to a location under the read-only media-library mount and rejects paths outside the configured root, symlink escapes, missing directories, and folders without a recognized Xiaomi recording layout.
 
 A valid saved folder starts indexing in the background immediately. Regular users can view folder names and playback status but cannot see server paths or use management APIs.
 
